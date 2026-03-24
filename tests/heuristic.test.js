@@ -1,4 +1,4 @@
-const { localHeuristicCheck } = require('../lib/api');
+const { analyzeText: localHeuristicCheck } = require('../lib/detection-core');
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
