@@ -26,11 +26,6 @@ lerna-debug.log*
 .env.production
 .env.*.local
 
-# Package lock files (use yarn or pnpm if preferred)
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
 # npm/Node cache
 .npm
 .eslintcache
