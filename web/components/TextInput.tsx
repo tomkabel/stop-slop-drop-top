@@ -1,141 +1,255 @@
 'use client'
 
 import { useStore } from '@/lib/store'
-import { FileText, Link, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { FileText, Link, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { motion, AnimatePresence } from 'framer-motion'
+
+const inputSchema = z.object({
+  text: z.string().min(10, 'Please enter at least 10 characters for analysis'),
+})
+
+type InputFormData = z.infer<typeof inputSchema>
+
+const samples = [
+  { key: 'ai' as const, label: 'AI-generated', desc: 'Typical AI writing with patterns' },
+  { key: 'academic' as const, label: 'Academic', desc: 'Formal scholarly prose' },
+  { key: 'marketing' as const, label: 'Marketing', desc: 'Sales copy with hype' },
+  { key: 'technical' as const, label: 'Technical', desc: 'Documentation style' },
+]
 
 export function TextInput() {
   const inputText = useStore(state => state.inputText)
   const setInputText = useStore(state => state.setInputText)
   const loadSampleText = useStore(state => state.loadSampleText)
+  
   const [showSamples, setShowSamples] = useState(false)
+  const [isLoadingUrl, setIsLoadingUrl] = useState(false)
+  const [urlError, setUrlError] = useState<string | null>(null)
 
-  const samples = [
-    { key: 'ai' as const, label: 'AI-generated', desc: 'Typical AI writing with patterns' },
-    { key: 'academic' as const, label: 'Academic', desc: 'Formal scholarly prose' },
-    { key: 'marketing' as const, label: 'Marketing', desc: 'Sales copy with hype' },
-    { key: 'technical' as const, label: 'Technical', desc: 'Documentation style' },
-  ]
+  const {
+    register,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<InputFormData>({
+    defaultValues: { text: inputText },
+    mode: 'onChange',
+  })
+
+  useEffect(() => {
+    const subscription = watch((value) => {
+      if (value.text !== undefined) {
+        setInputText(value.text)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [watch, setInputText])
+
+  const handleLoadSample = (key: 'ai' | 'academic' | 'marketing' | 'technical') => {
+    loadSampleText(key)
+    setValue('text', useStore.getState().inputText)
+    setShowSamples(false)
+  }
+
+  const handleLoadFromUrl = async () => {
+    const url = prompt('Enter URL to fetch text from:')
+    if (!url) return
+
+    setUrlError(null)
+    setIsLoadingUrl(true)
+
+    try {
+      const urlObj = new URL(url)
+      if (!['http:', 'https:'].includes(urlObj.protocol)) {
+        setUrlError('Only HTTP/HTTPS URLs are allowed')
+        return
+      }
+    } catch {
+      setUrlError('Invalid URL')
+      setIsLoadingUrl(false)
+      return
+    }
+
+    try {
+      const res = await fetch(url)
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+      
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('text/') && !contentType.includes('application/json')) {
+        throw new Error('Invalid content type')
+      }
+
+      const text = await res.text()
+      
+      const tempDiv = document.createElement('div')
+      tempDiv.innerHTML = text
+      const plainText = tempDiv.textContent || tempDiv.innerText || ''
+      
+      const truncatedText = plainText.slice(0, 5000)
+      setInputText(truncatedText)
+      setValue('text', truncatedText)
+    } catch (err) {
+      console.error('Failed to load URL:', err)
+      setUrlError('Failed to fetch URL. Ensure it allows CORS and contains text content.')
+    } finally {
+      setIsLoadingUrl(false)
+    }
+  }
+
+  const handleClear = () => {
+    setInputText('')
+    setValue('text', '')
+    setUrlError(null)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      document.getElementById('run-button')?.click()
+    }
+  }
+
+  const textValue = watch('text') || ''
+  const charCount = textValue.length
+  const hasContent = charCount > 0
 
   return (
-    <section className="bg-surface rounded-xl border border-border p-5">
-      <label className="block text-sm font-medium text-text-secondary mb-3">
-        Input Text
-      </label>
-
-      <div className="relative">
-        <textarea
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Enter text to transform... paste an AI-written paragraph to see how different SKILLs rewrite it."
-          className="w-full h-48 p-4 bg-background border border-border rounded-lg resize-none focus:ring-2 focus:ring-accent focus:border-accent text-text-primary placeholder:text-text-muted transition-all"
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault()
-              document.getElementById('run-button')?.click()
-            }
-          }}
-        />
-        <div className="absolute bottom-3 right-3 text-xs text-text-muted">
-          {inputText.length} characters
+    <Card className="w-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg font-semibold">Input Text</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="relative">
+          <Textarea
+            {...register('text')}
+            placeholder="Enter text to transform... paste an AI-written paragraph to see how different SKILLs rewrite it."
+            className={cn(
+              "h-48 resize-none pr-16",
+              errors.text && "border-destructive focus-visible:ring-destructive"
+            )}
+            onKeyDown={handleKeyDown}
+          />
+          <div className={cn(
+            "absolute bottom-3 right-3 text-xs flex items-center gap-1",
+            charCount > 4500 ? "text-destructive" : "text-muted-foreground"
+          )}>
+            {charCount > 4500 && <AlertCircle className="w-3 h-3" />}
+            {charCount}/5000
+          </div>
         </div>
-      </div>
 
-      <div className="flex items-center justify-between mt-4">
-        <div className="flex items-center gap-2">
-          {/* Load Sample Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSamples(!showSamples)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-elevated rounded-md transition-colors"
+        <AnimatePresence>
+          {errors.text && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex items-center gap-2 text-sm text-destructive"
             >
-              <FileText className="w-4 h-4" />
-              Load Sample
-            </button>
+              <AlertCircle className="w-4 h-4" />
+              {errors.text.message}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-            {showSamples && (
-              <div className="absolute left-0 top-full mt-1 w-64 bg-surface-elevated border border-border rounded-lg shadow-xl z-40">
-                {samples.map((sample) => (
-                  <button
-                    key={sample.key}
-                    onClick={() => {
-                      loadSampleText(sample.key)
-                      setShowSamples(false)
-                    }}
-                    className="w-full text-left px-4 py-3 hover:bg-surface-hover transition-colors first:rounded-t-lg last:rounded-b-lg"
+        <AnimatePresence>
+          {urlError && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex items-center gap-2 text-sm text-destructive"
+            >
+              <AlertCircle className="w-4 h-4" />
+              {urlError}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSamples(!showSamples)}
+                disabled={isLoadingUrl}
+              >
+                <FileText className="w-4 h-4" />
+                Load Sample
+              </Button>
+
+              <AnimatePresence>
+                {showSamples && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute left-0 top-full mt-1 w-64 bg-popover border border-border rounded-lg shadow-xl z-40"
                   >
-                    <div className="text-sm font-medium text-text-primary">{sample.label}</div>
-                    <div className="text-xs text-text-secondary">{sample.desc}</div>
-                  </button>
-                ))}
-              </div>
+                    {samples.map((sample, index) => (
+                      <motion.button
+                        key={sample.key}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: index * 0.05 }}
+                        onClick={() => handleLoadSample(sample.key)}
+                        className="w-full text-left px-4 py-3 hover:bg-accent/10 transition-colors first:rounded-t-lg last:rounded-b-lg"
+                      >
+                        <div className="text-sm font-medium">{sample.label}</div>
+                        <div className="text-xs text-muted-foreground">{sample.desc}</div>
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLoadFromUrl}
+              disabled={isLoadingUrl}
+            >
+              {isLoadingUrl ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Link className="w-4 h-4" />
+              )}
+              Load from URL
+            </Button>
+
+            {hasContent && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClear}
+                disabled={isLoadingUrl}
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear
+              </Button>
             )}
           </div>
 
-          {/* Load from URL */}
-          <button
-            aria-label="Load text from URL"
-            onClick={async () => {
-              const url = prompt('Enter URL to fetch text from:')
-              if (!url) return
-
-              try {
-                const urlObj = new URL(url)
-                if (!['http:', 'https:'].includes(urlObj.protocol)) {
-                  alert('Only HTTP/HTTPS URLs are allowed')
-                  return
-                }
-              } catch {
-                alert('Invalid URL')
-                return
-              }
-
-              try {
-                const res = await fetch(url)
-                if (!res.ok) {
-                  throw new Error(`HTTP ${res.status}`)
-                }
-                
-                const contentType = res.headers.get('content-type') || ''
-                if (!contentType.includes('text/') && !contentType.includes('application/json')) {
-                  throw new Error('Invalid content type')
-                }
-
-                const text = await res.text()
-                
-                const tempDiv = document.createElement('div')
-                tempDiv.innerHTML = text
-                const plainText = tempDiv.textContent || tempDiv.innerText || ''
-                
-                setInputText(plainText.slice(0, 5000))
-              } catch (err) {
-                console.error('Failed to load URL:', err)
-                alert('Failed to fetch URL. Ensure it allows CORS and contains text content.')
-              }
-            }}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-elevated rounded-md transition-colors"
-          >
-            <Link className="w-4 h-4" />
-            Load from URL
-          </button>
-
-          {/* Clear */}
-          {inputText && (
-            <button
-              aria-label="Clear input"
-              onClick={() => setInputText('')}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-elevated rounded-md transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              Clear
-            </button>
-          )}
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 text-[10px] bg-muted rounded">⌘</kbd>
+            <span>+</span>
+            <kbd className="px-1.5 py-0.5 text-[10px] bg-muted rounded">Enter</kbd>
+            <span>to run</span>
+          </div>
         </div>
-
-        <div className="text-xs text-text-muted">
-          <kbd>⌘</kbd>+<kbd>Enter</kbd> to run
-        </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   )
 }

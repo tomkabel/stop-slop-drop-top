@@ -2,9 +2,26 @@
 
 import { useStore } from '@/lib/store'
 import { PROVIDERS, getModelsForProvider, ProviderType } from '@/lib/llm-providers'
-import { ChevronDown, Settings, Key, Loader2, X } from 'lucide-react'
-import { clsx } from 'clsx'
+import { ChevronDown, Key, Loader2, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { cn } from '@/lib/utils'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 export function ProviderSelector() {
   const provider = useStore(state => state.provider)
@@ -18,9 +35,6 @@ export function ProviderSelector() {
   const setShowApiKeys = useStore(state => state.setShowApiKeys)
   const loadModel = useStore(state => state.loadModel)
 
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [showModelDropdown, setShowModelDropdown] = useState(false)
-
   const currentProvider = PROVIDERS[provider]
   const models = getModelsForProvider(provider)
   const currentModel = models.find(m => m.id === modelId)
@@ -29,9 +43,9 @@ export function ProviderSelector() {
     if (provider === 'webllm') {
       loadModel()
     } else if (apiKeys[provider]) {
-      setProvider(provider) // This will reset model to default
+      setProvider(provider)
     }
-  }, [provider, apiKeys])
+  }, [provider, apiKeys, loadModel, setProvider])
 
   const needsApiKey = currentProvider?.requiresApiKey
   const hasApiKey = provider !== 'webllm' && !!apiKeys[provider]
@@ -49,133 +63,121 @@ export function ProviderSelector() {
 
   return (
     <div className="flex items-center gap-2">
-      {/* API Key Button */}
-      {needsApiKey && (
-        <button
-          aria-label={hasApiKey ? 'API Key configured' : 'API Key required'}
-          onClick={() => setShowApiKeys(!showApiKeys)}
-          className={clsx(
-            'p-2 rounded-lg transition-colors',
-            hasApiKey
-              ? 'text-green-500 hover:bg-green-500/10'
-              : 'text-yellow-500 hover:bg-yellow-500/10'
-          )}
-          title={hasApiKey ? 'API Key configured' : 'API Key required'}
-        >
-          {hasApiKey ? <Key className="w-5 h-5" /> : <Key className="w-5 h-5" />}
-        </button>
-      )}
-
-      {/* Provider Dropdown */}
-      <div className="relative group">
-        <button
-          onClick={() => setShowDropdown(!showDropdown)}
-          className="flex items-center gap-2 px-3 py-2 bg-surface-elevated border border-border rounded-lg hover:border-accent transition-colors"
-        >
-          <span className="text-lg">{currentProvider?.icon}</span>
-          <span className="text-sm text-text-primary">{currentProvider?.name}</span>
-          <ChevronDown className="w-4 h-4 text-text-secondary" />
-        </button>
-
-        {showDropdown && (
-          <div className="absolute right-0 top-full mt-1 w-64 bg-surface-elevated border border-border rounded-lg shadow-xl z-50">
-            <div className="p-2 space-y-1">
-              {Object.values(PROVIDERS).map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    setProvider(p.id as ProviderType)
-                    setShowDropdown(false)
-                  }}
-                  className={clsx(
-                    'w-full text-left px-3 py-2 rounded-md transition-colors',
-                    provider === p.id
-                      ? 'bg-accent/20 text-accent'
-                      : 'hover:bg-surface text-text-primary'
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{p.icon}</span>
-                    <div>
-                      <div className="text-sm font-medium">{p.name}</div>
-                      <div className="text-xs text-text-secondary">{p.description}</div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+      <AnimatePresence>
+        {needsApiKey && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={hasApiKey ? 'API Key configured' : 'API Key required'}
+              onClick={() => setShowApiKeys(!showApiKeys)}
+              className={cn(
+                'p-2 rounded-lg transition-colors',
+                hasApiKey
+                  ? 'text-green-500 hover:bg-green-500/10'
+                  : 'text-yellow-500 hover:bg-yellow-500/10'
+              )}
+              title={hasApiKey ? 'API Key configured' : 'API Key required'}
+            >
+              <Key className="w-5 h-5" />
+            </Button>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
-      {/* Model Dropdown */}
-      <div className="relative group">
-        <button
-          onClick={() => setShowModelDropdown(!showModelDropdown)}
-          disabled={!hasApiKey && needsApiKey}
-          className={clsx(
-            'flex items-center gap-2 px-3 py-2 bg-surface-elevated border border-border rounded-lg transition-colors',
+      <Select
+        value={provider}
+        onValueChange={(value: string) => setProvider(value as ProviderType)}
+      >
+        <SelectTrigger className="w-[240px] bg-surface-elevated border-border hover:border-accent transition-colors">
+          <SelectValue placeholder="Select provider" />
+        </SelectTrigger>
+        <SelectContent className="bg-surface border-border">
+          {Object.values(PROVIDERS).map((p) => (
+            <SelectItem
+              key={p.id}
+              value={p.id}
+              className="focus:bg-surface-hover focus:text-text-primary"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{p.icon}</span>
+                <div>
+                  <div className="text-sm font-medium">{p.name}</div>
+                  <div className="text-xs text-text-secondary">{p.description}</div>
+                </div>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={modelId}
+        onValueChange={(value: string) => setModelId(value)}
+        disabled={!hasApiKey && needsApiKey}
+      >
+        <SelectTrigger
+          className={cn(
+            'w-[320px] bg-surface-elevated border-border transition-colors',
             hasApiKey || !needsApiKey
               ? 'hover:border-accent cursor-pointer'
               : 'opacity-50 cursor-not-allowed'
           )}
         >
-          {isLoading && <Loader2 className="w-4 h-4 animate-spin text-accent" />}
-          <span className={clsx('w-2 h-2 rounded-full', statusColors[modelStatus])} />
-          <span className="text-sm text-text-primary">{currentModel?.name || modelId}</span>
-          <ChevronDown className="w-4 h-4 text-text-secondary" />
-        </button>
-
-        {showModelDropdown && (
-          <div className="absolute right-0 top-full mt-1 w-72 bg-surface-elevated border border-border rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
-            <div className="p-2 space-y-1">
-              {models.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => {
-                    setModelId(m.id)
-                    setShowModelDropdown(false)
-                  }}
-                  className={clsx(
-                    'w-full text-left px-3 py-2 rounded-md transition-colors',
-                    modelId === m.id
-                      ? 'bg-accent/20 text-accent'
-                      : 'hover:bg-surface text-text-primary'
-                  )}
-                >
-                  <div className="text-sm font-medium">{m.name}</div>
-                  <div className="text-xs text-text-secondary">{m.description}</div>
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
+            {isLoading && <Loader2 className="w-4 h-4 animate-spin text-accent" />}
+            <span className={cn('w-2 h-2 rounded-full', statusColors[modelStatus])} />
+            <SelectValue placeholder="Select model" />
           </div>
-        )}
-      </div>
+        </SelectTrigger>
+        <SelectContent className="bg-surface border-border max-h-80">
+          {models.map((m) => (
+            <SelectItem
+              key={m.id}
+              value={m.id}
+              className="focus:bg-surface-hover focus:text-text-primary"
+            >
+              <div>
+                <div className="text-sm font-medium">{m.name}</div>
+                <div className="text-xs text-text-secondary">{m.description}</div>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-      {/* API Key Modal */}
-      {showApiKeys && (
-        <ApiKeyModal
-          provider={provider}
-          apiKey={apiKeys[provider]}
-          onSetKey={(key) => setApiKey(provider, key)}
-          onClose={() => setShowApiKeys(false)}
-        />
-      )}
+      <ApiKeyModal
+        open={showApiKeys}
+        provider={provider}
+        apiKey={apiKeys[provider]}
+        onSetKey={(key) => setApiKey(provider, key)}
+        onClose={() => setShowApiKeys(false)}
+      />
     </div>
   )
 }
 
 interface ApiKeyModalProps {
+  open: boolean
   provider: ProviderType
   apiKey: string
   onSetKey: (key: string) => void
   onClose: () => void
 }
 
-function ApiKeyModal({ provider, apiKey, onSetKey, onClose }: ApiKeyModalProps) {
+function ApiKeyModal({ open, provider, apiKey, onSetKey, onClose }: ApiKeyModalProps) {
   const [key, setKey] = useState(apiKey)
   const [showKey, setShowKey] = useState(false)
   const p = PROVIDERS[provider]
+
+  useEffect(() => {
+    setKey(apiKey)
+  }, [apiKey])
 
   const handleSave = () => {
     onSetKey(key.trim())
@@ -213,27 +215,21 @@ function ApiKeyModal({ provider, apiKey, onSetKey, onClose }: ApiKeyModalProps) 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+      <Dialog open={open} onOpenChange={(isOpen: boolean) => !isOpen && onClose()}>
+      <DialogContent className="bg-surface border-border max-w-md">
+        <DialogHeader>
           <div className="flex items-center gap-2">
             <span className="text-2xl">{p.icon}</span>
-            <h3 className="text-lg font-semibold text-text-primary">Configure {p.name}</h3>
+            <DialogTitle className="text-lg font-semibold text-text-primary">
+              Configure {p.name}
+            </DialogTitle>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-surface-elevated rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-text-secondary" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <p className="text-sm text-text-secondary">
+          <DialogDescription className="text-text-secondary">
             Enter your {p.name} API key to use {p.name} models. Your key is stored locally in your browser and never sent to our servers.
-          </p>
+          </DialogDescription>
+        </DialogHeader>
 
+        <div className="space-y-4 py-4">
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">
               API Key
@@ -266,22 +262,23 @@ function ApiKeyModal({ provider, apiKey, onSetKey, onClose }: ApiKeyModalProps) 
           </a>
         </div>
 
-        <div className="px-6 py-4 border-t border-border flex justify-end gap-3">
-          <button
+        <DialogFooter>
+          <Button
+            variant="ghost"
             onClick={onClose}
-            className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
+            className="text-text-secondary hover:text-text-primary"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSave}
             disabled={!key.trim()}
-            className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 text-background rounded-lg text-sm font-medium transition-colors"
+            className="bg-accent hover:bg-accent-hover text-background"
           >
             Save API Key
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
