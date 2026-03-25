@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "pages:build": "next-on-pages",
-    "deploy": "npm run build && npm run pages:build",
+    "cloudflare:build": "next-on-pages && mkdir -p .output && cp -r .vercel/output/static .output/static",
+    "deploy": "npm run build && npm run cloudflare:build",
+    "deploy:pages": "npm run build && npm run pages:build",
     "start": "next start",
     "lint": "next lint"
   },

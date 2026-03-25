@@ -1,6 +1,7 @@
 name = "stop-slop-drop-top"
-compatibility_date = "2024-01-01"
-pages_build_output_dir = ".vercel/output/static"
+compatibility_date = "2025-01-01"
+# next-on-pages outputs to .vercel/output/static - hardcoded in @cloudflare/next-on-pages
+pages_build_output_dir = ".output/static"
 
 [env.production]
 vars = { NEXT_RUNTIME = "edge" }
